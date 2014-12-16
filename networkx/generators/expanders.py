@@ -8,7 +8,8 @@
 import itertools
 import networkx as nx
 
-__all__ = ['margulis_gabber_galil_graph', 'chordal_cycle_graph']
+__all__ = ['margulis_gabber_galil_graph', 'chordal_cycle_graph',
+           'zig_zag_graph']
 
 
 # Other discrete torus expanders can be constructed by using the following edge
@@ -150,3 +151,18 @@ def chordal_cycle_graph(p, create_using=None):
             G.add_edge(x, y)
     G.graph['name'] = "chordal_cycle_graph({0})".format(p)
     return G
+
+
+def _initial_expander(d):
+    # Creates a (d**8, d, 7/8) expander.
+    raise NotImplemented
+
+
+def zig_zag_expander(d, t):
+    H = _initial_expander(d)
+    def _helper(depth):
+        if depth <= 1:
+            return nx.pow(H, 2)
+        G = _helper(depth - 1)
+        return nx.zig_zag_product(nx.pow(nx.tensor_product(G, G), 2), H)
+    return _helper(t)

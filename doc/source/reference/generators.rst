@@ -48,8 +48,9 @@ Expanders
 .. autosummary::
    :toctree: generated/
 
-   margulis_gabber_galil_graph
    chordal_cycle_graph
+   margulis_gabber_galil_graph
+   zig_zag_graph
 
 
 Small

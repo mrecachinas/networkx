@@ -65,6 +65,18 @@ def test_chordal_cycle_graph():
         #
 
 
+def test_zig_zag_graph():
+    """Test for the :func:`networkx.zig_zag_graph` function."""
+    if not is_scipy_available:
+        raise SkipTest('SciPy is not available')
+    G = zig_zag_graph(100)
+    assert_equal(len(G), 100)
+    # The second largest eigenvalue should be smaller than a constant,
+    # independent of the number of nodes in the graph:
+    #eigs = sorted(scipy.linalg.eigvalsh(adjacency_matrix(G).A))
+    #assert_less(eigs[-2], ...)
+
+
 def test_margulis_gabber_galil_graph_badinput():
     assert_raises(nx.NetworkXError, margulis_gabber_galil_graph, 3,
                   nx.DiGraph())

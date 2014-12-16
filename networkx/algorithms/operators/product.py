@@ -425,3 +425,53 @@ def power(G, k):
             level = level + 1
         H.add_edges_from((n, nbr) for nbr in seen)
     return H
+
+
+def _index_of(G, u, v):
+    """Returns the index of vertex `v` in the order given by the iterator over
+    the neighbors of `u` in the graph `G`.
+
+    """
+    return G[u].index(v)
+
+
+def replacement_product(G, H):
+    # Returns the replacement product of G and H (the latter replacing the
+    # vertices of the former).
+    #
+    # The replacement product is d + 1 regular if H is d-regular.
+    #
+    # PRECONDITION G is d-regular, and H has d vertices
+    # PRECONDITION The vertices of H are numbered from 0 to d - 1
+    GH = _init_product_graph(G, H)
+    GH.add_nodes_from(_node_product(G, H))
+    # For each cloud in G, add the edges of H.
+    for u in G:
+        for (i, j) in H.edges():
+            GH.add_edge((u, i), (u, j))
+    # Add edges between each cloud.
+    for (u, v) in G.edges():
+        i = _index_of(G, u, v)
+        j = _index_of(G, v, u)
+        GH.add_edge((u, i), (v, j))
+    GH.name = 'Replacement product({0}, {1})'.format(G.name, H.name)
+    return GH
+
+
+def zig_zag_product(G, H):
+    # Returns the zig-zag product of G and H.
+    #
+    # PRECONDITION G is d-regular and H has d vertices and is d2-regular.
+    # PRECONDITION same as preconditions for replacement_product
+    GH = _init_product_graph(G, H)
+    GH.add_nodes_from(_node_product(G, H))
+    R = replacement_product(G, H)
+    # TODO this is going to be very slow...
+    for ((u, i), (v, l)) in itertools.product(GH, repeat=2):
+        if any((u, j) in R[(u, i)]  # zig
+               and (v, k) in R[(u, j)]  # zag
+               and (v, l) in R[(v, k)]  # zig again
+               for (j, k) in itertools.product(range(len(H)), repeat=2)):
+            GH.add_edge((u, i), (v, l))
+    GH.name = 'Zig-zag product({0}, {1})'.format(G.name, H.name)
+    return GH
