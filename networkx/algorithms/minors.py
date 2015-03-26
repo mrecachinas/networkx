@@ -1,3 +1,4 @@
+# -*- encoding: utf-8 -*-
 # minors.py - functions for computing minors of graphs
 #
 # Copyright 2015 Jeffrey Finkelstein <jeffrey.finkelstein@gmail.com>.
@@ -11,11 +12,91 @@ from itertools import chain
 from itertools import combinations
 from itertools import permutations
 from itertools import product
+from functools import partial
 
-from ..utils import arbitrary_element
+from networkx.utils import arbitrary_element
 
-__all__ = ['contracted_edge', 'contracted_nodes',
-           'identified_nodes', 'quotient_graph']
+__all__ = ['canonical_graph', 'contracted_edge', 'contracted_nodes',
+           'identified_nodes', 'is_canonical', 'quotient_graph']
+
+
+# The following three functions, are_nodes_equal, are_edges_equal, and
+# are_graphs_equal, are modified versions of the corresponding assertion
+# functions from the networkx.testing.utils module.
+
+def are_nodes_equal(nlist1, nlist2):
+    """Returns ``True`` if and only if the two specified node lists are equal.
+
+    """
+    # Assumes lists are either nodes, or (node, datadict) tuples, and also that
+    # nodes are comparable.
+    try:
+        n1 = sorted(nlist1, key=lambda x: x[0])
+        n2 = sorted(nlist2, key=lambda x: x[0])
+        if len(n1) != len(n2):
+            return False
+        return all(a == b for a, b in zip(n1, n2))
+    except TypeError:
+        return set(nlist1) == set(nlist2)
+
+
+def are_edges_equal(elist1, elist2):
+    """Returns ``True`` if and only if the two specified edge lists are equal.
+
+    """
+    # Assumes lists have elements in one of the following forms:
+    # 1. edge tuples (u, v)
+    # 2. edge tuples with data dicts (u, v, d)
+    # 3. edge tuples with keys and data dicts (u, v, k, d)
+    # and also that nodes are comparable.
+    e1 = sorted(elist1, key=lambda x: sorted(x[0:2]))
+    e2 = sorted(elist2, key=lambda x: sorted(x[0:2]))
+    if len(e1) != len(e2):
+        return False
+    if len(e1) == 0:
+        return True
+    if len(e1[0]) == 2:
+        if any(set(a[0:2]) != set(b[0:2]) for a, b in zip(e1, e2)):
+            return False
+    elif len(e1[0]) == 3:
+        if any(set(a[0:2]) != set(b[0:2]) or a[2] != b[2]
+               for a, b in zip(e1, e2)):
+            return False
+    elif len(e1[0]) == 4:
+        return all(set(a[0:2]) == set(b[0:2]) and a[2] == b[2] and a[3] == b[3]
+                   for a, b in zip(e1, e2))
+    return True
+
+
+def are_graphs_equal(G, H):
+    """Returns ``True`` if and only if ``G`` and ``H`` have the same node set,
+    same edge set, and same :attr:`networkx.Graph.graph` dictionary.
+
+    """
+    if not are_nodes_equal(G.nodes(data=True), H.nodes(data=True)):
+        return False
+    if G.is_multigraph():
+        edges1 = G.edges(data=True, keys=True)
+    else:
+        edges1 = G.edges(data=True)
+    if H.is_multigraph():
+        edges2 = H.edges(data=True, keys=True)
+    else:
+        edges2 = H.edges(data=True)
+    if not are_edges_equal(edges1, edges2):
+        return False
+    return G.graph == H.graph
+
+
+def same_neighbors(G, u, v):
+    """Returns ``True`` if and only if the vertices ``u`` and ``v`` have the
+    same set of neighbors in ``G``.
+
+    In other words, this returns ``True`` exactly when row ``u`` and row ``v``
+    of the adjacency matrix of ``G`` are identical.
+
+    """
+    return u not in G[v] and v not in G[u] and G[u] == G[v]
 
 
 def equivalence_classes(iterable, relation):
@@ -299,3 +380,62 @@ def contracted_edge(G, edge, self_loops=True):
         raise ValueError('Edge {0} does not exist in graph G; cannot contract'
                          ' it'.format(edge))
     return contracted_nodes(G, *edge, self_loops=self_loops)
+
+
+def is_canonical(G):
+    """Returns ``True`` if and only if ``G`` is a *canonical graph*.
+
+    A graph is *canonical* if it equals its canonical quotient, as described in
+    :func:`canonical_quotient` [1]_.
+
+    Parameters
+    ----------
+    G : NetworkX graph
+        A NetworkX graph to check for canonical-ness.
+
+    Returns
+    -------
+    bool
+        Returns ``True`` if and only if the given graph is canonical.
+
+    References
+    ----------
+    .. [1] Torgašev, Aleksander.
+           "On graphs with a fixed number of negative eigenvalues."
+           Discrete Mathematics 57.3 (1985): 311--317.
+           http://dx.doi.org/10.1016/0012-365X(85)90184-0
+
+    """
+    return are_graphs_equal(G, canonical_graph(G))
+
+
+def canonical_graph(G):
+    """Returns the canonical graph of ``G``.
+
+    The *canonical graph* of a given graph ``G`` is the quotient graph that
+    identifies all nodes that are not adjacent but have the same set of
+    neighbors in ``G`` [1]_.
+
+    This is unrelated to the "`canonical labeling`_" of a graph.
+
+    .. _canonical labeling: https://en.wikipedia.org/wiki/Graph_canonization
+
+    Parameters
+    ----------
+    G : NetworkX graph
+        A NetworkX graph whose canonical graph will be returned.
+
+    Returns
+    -------
+    NetworkX graph
+        The canonical graph of ``G``.
+
+    References
+    ----------
+    .. [1] Torgašev, Aleksander.
+           "On graphs with a fixed number of negative eigenvalues."
+           Discrete Mathematics 57.3 (1985): 311--317.
+           http://dx.doi.org/10.1016/0012-365X(85)90184-0
+
+    """
+    return quotient_graph(G, partial(same_neighbors, G))

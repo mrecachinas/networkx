@@ -146,3 +146,21 @@ class TestContraction(object):
         """
         G = nx.cycle_graph(4)
         nx.contracted_edge(G, (0, 2))
+
+
+class TestCanonical(object):
+    """Unit tests for canonical graph functions."""
+
+    def test_is_canonical(self):
+        """Tests that a canonical graph is correctly identified."""
+        G = nx.complete_graph(3)
+        assert_true(nx.is_canonical(G))
+
+    def test_canonical_graph_K3(self):
+        """Tests that the canonical graph of the complete tripartite graph is
+        the complete graph on three nodes.
+
+        """
+        G = nx.complete_multipartite_graph(2, 3, 4)
+        K3 = nx.complete_graph(3)
+        assert_true(nx.is_isomorphic(G, K3))
