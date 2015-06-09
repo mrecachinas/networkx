@@ -29,17 +29,19 @@ Matplotlib
    :toctree: generated/
 
    draw
+   draw_circular
+   draw_graphviz
    draw_networkx
    draw_networkx_nodes
    draw_networkx_edges
    draw_networkx_labels
    draw_networkx_edge_labels
-   draw_circular
+   draw_path
+   draw_paths
    draw_random
    draw_spectral
    draw_spring
    draw_shell
-   draw_graphviz
 
 
 

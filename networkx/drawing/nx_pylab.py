@@ -21,22 +21,51 @@ pygraphviz:     http://pygraphviz.github.io/
 #    Pieter Swart <swart@lanl.gov>
 #    All rights reserved.
 #    BSD license.
+
+#    Copyright (C) 2008 by
+#    Maciej Kurant <maciej.kurant@epfl.ch>
+#    Distributed under the terms of the GNU Lesser General Public License
+#    http://www.gnu.org/copyleft/lesser.html
+from __future__ import division
+
+from collections import Counter
+from itertools import chain
+
+try:
+    import matplotlib
+    import matplotlib.path
+    from matplotlib.path import Path
+    from matplotlib.patches import PathPatch
+except ImportError:
+    is_matplotlib_available = False
+except RuntimeError:
+    # Unable to open display.
+    is_matplotlib_available = True
+else:
+    is_matplotlib_available = True
+
 import networkx as nx
-from networkx.drawing.layout import shell_layout,\
-    circular_layout,spectral_layout,spring_layout,random_layout
+from networkx.drawing.layout import shell_layout, circular_layout, \
+    spectral_layout, spring_layout, random_layout
 
 __all__ = ['draw',
+           'draw_circular',
+           'draw_graphviz',
            'draw_networkx',
            'draw_networkx_nodes',
            'draw_networkx_edges',
            'draw_networkx_labels',
            'draw_networkx_edge_labels',
-           'draw_circular',
+           'draw_path',
+           'draw_paths',
            'draw_random',
            'draw_spectral',
            'draw_spring',
-           'draw_shell',
-           'draw_graphviz']
+           'draw_shell']
+
+
+#: The default distance between nodes drawn in a path.
+DEFAULT_SHIFT = 0.02
 
 
 def draw(G, pos=None, ax=None, hold=None, **kwds):
@@ -987,6 +1016,384 @@ def draw_graphviz(G, prog="neato", **kwargs):
 def draw_nx(G, pos, **kwds):
     """For backward compatibility; use draw or draw_networkx."""
     draw(G, pos, **kwds)
+
+
+def is_valid_edge_path(G, path):
+    """Returns ``True`` if and only if the path consists of consecutive edges
+    in ``G``.
+
+    """
+    return (all(v == w and v in G[u] and z in G[w]
+                for (u, v), (w, z) in zip(path, path[1:]))
+            and G.has_edge(*path[0]) and G.has_edge(*path[-1]))
+
+
+def is_valid_node_path(G, path):
+    """Returns ``True`` if and only if the path is a valid node path in ``G``.
+
+    This function does not consider a single node to be a valid path.
+
+    """
+    return len(path) >= 2 and all(v in G[u] for u, v in zip(path, path[1:]))
+
+
+def to_node_path(path):
+    """Converts a list of consecutive edges to a list of nodes representing the
+    same path.
+
+    For example::
+
+        >>> to_node_path([(10, 3), (3, 6), (6, 11)]
+        [10, 3, 6, 11]
+
+    Pre-condition: the list of edges is a valid edge path in a graph.
+
+    """
+    return [u for u, v in path] + [path[-1][1]]
+
+
+def to_edge_path(path, G=None):
+    """Converts a node path to an edge path.
+
+    For example::
+
+        >>> to_edge_path([10, 3, 6, 11])
+        [(10, 3), (3, 6), (6, 11)]
+
+    If ``G`` is given, then the path validity is checked. In this case,
+    ``path`` may be provided as an edge path; in this case it is
+    returned directly.
+
+    """
+    if G is None:
+        return list(zip(path, path[1:]))
+    if is_valid_node_path(G, path):
+        return to_edge_path(path)
+    if is_valid_edge_path(G, path):
+        return path
+    raise ValueError('Not a valid path: {}'.format(path))
+
+
+def vector_length(v):
+    """Returns the Euclidean norm of the vector ``v``, a NumPy array."""
+    return math.sqrt(numpy.dot(v, v))
+
+
+def norm_vector(v):
+    """Returns a vector of norm one, pointing in the same direction as
+    ``v``, a NumPy array.
+
+    """
+    l = vector_length(v)
+    if l == 0:
+        raise ValueError('Vector {} has length 0!'.format(v))
+    return v / l
+
+
+def perpendicular_vector(v):
+    """Returns a two-dimensional vector perpendicular to ``v``, a
+    two-dimensional NumPy array.
+
+    """
+    return numpy.array([v[1],-v[0]])
+
+
+def crossing_point(p1a, p1b, p2a, p2b):
+    """Returns the crossing of line1 defined by two points p1a and p1b,
+    and line2 defined by two points p2a, p2b.
+
+    All points should be of format numpy.array([x,y]).
+
+    If line1 and line2 are parallel then returns None.
+
+    """
+    # See e.g.: http://stackoverflow.com/questions/153592/how-do-i-determine-the-intersection-point-of-two-lines-in-gdi
+
+    if tuple(p1a) == tuple(p1b) or tuple(p2a) == tuple(p2b):
+        raise ValueError('Two points defining a line are identical!')
+    v1 = p1b - p1a
+    v2 = p2b - p2a
+    x12 = p2a - p1a
+    D = numpy.dot(v1, v1) * numpy.dot(v2, v2) - numpy.dot(v1, v2) * numpy.dot(v1, v2)
+    if D == 0:
+        # Lines are parallel!
+        return None
+    a = (numpy.dot(v2, v2) * numpy.dot(v1, x12) - numpy.dot(v1, v2) * numpy.dot(v2, x12)) / D
+    return p1a + v1 * a
+
+
+def is_layout_normalized(pos):
+    """Returns ``True`` if and only if all the values of the given
+    dictionary are points within the unit square with center `(.5, .5)`.
+
+    """
+    return all(0 <= x <= 1 and 0 <= y <= 1 for x, y in pos.values())
+    # A = numpy.asarray(pos.values())
+    # return (0 <= min(A[:, 0]) <= max(A[:, 0]) <= 1
+    #         and 0 <= min(A[:, 1]) <= max(A[:, 1]) <= 1)
+
+
+# TODO This already almost exists as _rescale_layout in layout.py
+#
+# TODO This should be `normalized` and return a new dictionary.
+def normalize_layout(pos):
+    """All node positions are normalized to fit in the unit square
+    centered at `(.5, .5)`.
+
+    """
+    if len(pos) == 1:
+        v = next(iter(pos))
+        pos[v] = numpy.array([0.5, 0.5])
+        return
+    A = numpy.asarray(pos.values())
+    x0, y0, x1, y1 = min(A[:, 0]), min(A[:, 1]), max(A[:, 0]), max(A[:, 1])
+    for v in pos:
+        pos[v] = (pos[v] - (x0, y0)) / (x1 - x0, y1 - y0) * 0.8 + (0.1, 0.1)
+    return
+
+
+def draw_path(G, pos, path, shifts=None, color='r', linestyle='solid',
+              linewidth=1.0):
+    """Draw a path in the given graph.
+
+    Parameters
+    ----------
+    pos : dictionary
+        A node layout used to draw G. Must be normalized so that both
+        the *x* and *y* values of the points are in the interval [0, 1]
+        (for example, as returned by :func:`normalize_layout`).
+
+    path : list
+        A list of nodes or a list of edges representing a valid path in
+        the graph.
+
+    shifts : list
+
+        A list whose length equals the length of the given path (that
+        is, as an edge path) specifying the distances at which to place
+        the nodes in the path.
+
+    color : string
+        Must be one of ``('b', 'g', 'r', 'c', 'm', 'y')``.
+
+    linestyle : string
+        Must be one of ``('solid', 'dashed', 'dashdot', 'dotted')``.
+
+    linewidth : float
+        The width of the line in number of pixels.
+
+    Examples
+    --------
+    >>> import matplotlib.pyplot as plt
+    >>> import networkx as nx
+    >>> G = nx.krackhardt_kite_graph()
+    >>> pos = nx.drawing.spring_layout(G)
+    >>> normalize_layout(pos)
+    >>> nx.draw(G, pos)
+    >>> path = networkx.shortest_path(G, 3, 9)
+    >>> nx.draw_path(G, pos, path, color='g', linewidth=2)
+    >>> plt.show()
+    
+    """
+    if not is_layout_normalized(pos):
+        raise ValueError('Layout is not normalized; use normalize_layout().')
+    edge_path = to_edge_path(path, G)
+    # If the path is empty, draw nothing.
+    if not edge_path:
+        return
+    if shifts is None:
+        shifts = [DEFAULT_SHIFT] * len(edge_path)
+    if len(shifts) != len(edge_path):
+        raise ValueError('The length of `shifts` does not match that of'
+                         ' `edge_path`.')
+
+    # Store the positions of the edges.
+    edge_pos = [numpy.array([pos[u], pos[v]]) for u, v in edge_path]
+    # Shift each edge along a perpendicular vector of length determined
+    # by `shifts`.
+    edge_shifts = [shift * perpendicular_vector(norm_vector(t - s))
+                   for shift, (s, t) in zip(shifts, edge_pos)]
+
+      
+    # prepare vertices and codes for object
+    # matplotlib.path.Path(vertices, codes) - the path to display
+
+    # vertices: an Nx2 float array of vertices  (not the same as graph nodes!)
+
+    # codes: an N-length uint8 array of vertex types (such as MOVETO,
+    # LINETO, CURVE4) - a cube Bezier curve
+
+    # See e.g. http://matplotlib.sourceforge.net/api/path_api.html
+
+    # First, for every corner (that is, every node on the path), we
+    # define four points to help smooth it.
+    corners = []
+    
+    # The first corner is on a straight line, making it easier to
+    # process the next ones.
+    p1a, p1b = edge_pos[0] + edge_shifts[0]
+    V1 = p1b-p1a
+    corners.append([p1a, p1a + 0.1 * V1, p1a + 0.1 * V1, p1a + 0.2 * V1])
+   
+    #All real corners - with edes on both sides
+    for i in range(len(edge_pos)-1):
+        # crossing point of the original (i)th and (i + 1)th edges 
+        p_node = edge_pos[i][1]
+        # two points defining the shifted (i)th edge 
+        p1a, p1b = edge_pos[i] + edge_shifts[i]
+        # two points defining the shifted (i + 1)th edge
+        p2a, p2b = edge_pos[i + 1] + edge_shifts[i + 1]
+        # unit vector along the (i)th edge
+        V1 = norm_vector(p1b - p1a)
+        # unit vector along the (i + 1)th edge
+        V2 = norm_vector(p2b - p2a)
+        # a point that splits evenly the angle between the original
+        # (i)th and (i + 1)th edges
+        p_middle_angle = p_node + (V2 - V1)
+        # crossing point of the shifted (i)th and (i + 1)th edges
+        c12 = crossing_point(p1a, p1b, p2a, p2b)
+        # Check if the edges are parallel.
+        if c12 is None:
+            c12 = (p1b + p2a) / 2
+            p_middle_angle = c12
+        # crossing point of the shifted (i)th edge and the
+        # middle-angle-line
+        c1 = crossing_point(p1a, p1b, p_node, p_middle_angle)
+        # crossing point of the shifted (i + 1)th edge and the
+        # middle-angle-line
+        c2 = crossing_point(p2a, p2b, p_node, p_middle_angle)
+        # average shift - a reasonable normalized distance measure
+        D= 0.5 * (shifts[i] + shifts[i + 1])
+
+        # if the crossing point c12 is relatively close to the node
+        if vector_length(p_node - c12) < 2.5 * D:
+            # then c12 defines two consecutive reference points in the
+            # cube Bezier curve
+            corners.append([c12 - D * V1, c12, c12, c12 + D * V2])
+        # the crossing point c12 is NOT relatively close to the node
+        else:
+            P1 = p1b + D * V1
+            if numpy.dot(c1 - P1, V1) < 0:
+                P1 = c1
+            P2 = p2a - D * V2
+            if numpy.dot(c2 - P2, V2) > 0:
+                P2 = c2
+            corners.append([P1 - D * V1, P1, P2, P2 + D * V2])
+
+    # The last corner: on one line, easier to process next
+    p1a, p1b = edge_pos[-1] + edge_shifts[-1]
+    V1 = p1b - p1a
+    corners.append([p1b - 0.2 * V1, p1b - 0.1 * V1, p1b - 0.1 * V1, p1b])
+ 
+    # Now, based on corners, we prepare vertices and codes
+    vertices = []
+    codes = []
+    # First operation must be a MOVETO, move pen to first vertex on the path
+    vertices += [corners[0][0]]
+    codes += [Path.MOVETO]
+
+    for i, corner in enumerate(corners):
+        # If there is not enough space to draw a corner, then replace
+        # the last two vertices from the previous section, by the last
+        # two vertices of the current section
+        if i > 0:
+            if vector_length(norm_vector(corner[0] - vertices[-1])
+                             - norm_vector(corner[1] - corner[0])) > 1:
+                vertices.pop();
+                vertices.pop();
+                vertices += corner[-2:]
+                continue
+        
+        codes += [Path.LINETO, Path.CURVE4, Path.CURVE4, Path.CURVE4]
+        vertices += corner
+
+    # Finally, create a nice path and display it
+    path = Path(vertices, codes)
+    patch = PathPatch(path, edgecolor=color, linestyle=linestyle,
+                      linewidth=linewidth, fill=False, alpha=1)
+    ax = matplotlib.pylab.gca()
+    ax.add_patch(patch)
+    ax.update_datalim(((0, 0), (1, 1)))
+    ax.autoscale_view()
+    return
+
+
+def draw_paths(G, pos, paths, max_shift=0.02, linewidth=2.0):
+    """Draw each path specified in ``paths`` in the graph ``G``.
+
+    Colors and line styles are chosen automatically.
+
+    All paths are visible, no path section can be covered by another
+    path.
+
+    Parameters
+    ----------
+    pos : dictionary
+        A node layout used to draw G. Must be normalized so that both
+        the *x* and *y* values of the points are in the interval [0, 1]
+        (for example, as returned by :func:`normalize_layout`).
+
+    paths : list
+        A list of paths. Each path must be a list of nodes or a list of
+        edges representing a valid path in the graph.
+
+    max_shift : float
+        Maximum allowable distance between an edge and a path traversing
+        it.
+
+    linewidth : float
+        The width of the line in number of pixels.
+
+    Examples
+    --------
+
+    Each path can be provided as a list of edges or as a list of nodes::
+
+        >>> import matplotlib.pyplot as plt
+        >>> import networkx as nx
+        >>> G = nx.krackhardt_kite_graph()
+        >>> G.remove_node(9)
+        >>> path1 = networkx.shortest_path(G, 2, 8)
+        >>> path2 = networkx.shortest_path(G, 0, 8)
+        >>> path3 = [(1, 0), (0, 5), (5, 7)]  # A path as a list of edges.
+        >>> path4 = [3, 5, 7, 6]  # A path as a list of nodes.
+        >>> pos = nx.drawing.spring_layout(G)
+        >>> normalize_layout(pos)
+        >>> nx.draw(G, pos, node_size=140)
+        >>> nx.draw_many_paths(G, pos, [path1, path2, path3, path4],
+        ...                    max_shift=0.03)
+        >>> plt.show()
+
+    """
+    
+    if not paths:
+        return
+    if not is_layout_normalized(pos):
+        raise ValueError('Layout is not normalized; use normalize_layout().')
+        
+    edge_paths = [to_edge_path(path, G) for path in paths]
+    # Sort edge_paths from the longest to the shortest
+    edge_paths.sort(key=len, reverse=True)
+    
+    # Find the largest number of edge_paths traversing the same edge and
+    # set single_shift accordingly
+    edge2count = Counter(chain.from_iterable(path for path in edge_paths))
+    single_shift = max_shift / max(edge2count.values())
+
+    # Draw the edge_paths by calling draw_path(...). Use edge2shift to
+    # prevent the path overlap on some edges.q
+    colors = ('b', 'g', 'r', 'c', 'm', 'y')
+    linestyles = ('solid', 'dashed', 'dashdot', 'dotted')
+    edge2shift = {}
+    for i, path in enumerate(edge_paths):
+        shifts = [edge2shift.setdefault(e, single_shift) for e in path]
+        color = colors[i % len(colors)]
+        linestyle = linestyles[i / len(colors) % len(linestyles)],
+        draw_path(G, pos, path, color=color, linestyle=linestyle,
+                  linestyle=linestyle, linewidth=linewidth, shifts=shifts)
+        for e in path:
+            edge2shift[e] += single_shift
+    return
 
 
 # fixture for nose tests

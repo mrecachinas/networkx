@@ -623,4 +623,3 @@ def flatten(l):
                 yield sub
         else:
             yield el
-
