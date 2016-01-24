@@ -1,54 +1,106 @@
-#!/usr/bin/env python
-from nose.tools import *
-import networkx
-import networkx as nx
+from itertools import chain
 
+from nose.tools import assert_equal
+from nose.tools import assert_raises
+from nose.tools import assert_true
+from nose.tools import raises
+
+import networkx as nx
 from networkx.algorithms import find_cycle
+from networkx.utils import pairwise
+
 FORWARD = nx.algorithms.edgedfs.FORWARD
 REVERSE = nx.algorithms.edgedfs.REVERSE
 
+
+class TestCycleBasis(object):
+    """Unit tests for the :func:`networkx.algorithms.cycles.cycle_basis`
+    function.
+
+    Test methods in this class should use the provided graph :attr:`G`
+    and expected cycle basis :attr:`expected`, as well as the method
+    :meth:`cycle_basis`, which compares a given list of cycles to the
+    expected basis.
+
+    """
+
+    def setup(self):
+        """Creates a graph that has three (overlapping) cycles, and sets
+        the expected cycle basis for this graph.
+
+        """
+        cycle1 = pairwise([0, 1, 2, 3], cyclic=True)
+        cycle2 = pairwise([0, 3, 4, 5], cyclic=True)
+        cycle3 = pairwise([0, 1, 6, 7, 8], cyclic=True)
+        G = nx.Graph(chain(cycle1, cycle2, cycle3))
+        # The graph also has an edge that will not be part of any cycle basis.
+        G.add_edge(8, 9)
+        self.G = G
+        self.expected = [[0, 1, 2, 3], [0, 1, 6, 7, 8], [0, 3, 4, 5]]
+
+    def check_basis(self, basis):
+        """Sorts the given list of cycles and compares that list with
+        the expected cycle basis for the graph :attr:`G`.
+
+        `basis` is a list of lists, each element of which is a node in
+        the graph :attr:`G`.
+
+        """
+        sorted_basis = sorted(sorted(cycle) for cycle in basis)
+        assert_equal(sorted_basis, self.expected)
+
+    def test_without_root(self):
+        basis = nx.cycle_basis(self.G)
+        self.check_basis(basis)
+
+    def test_root_independent(self):
+        """Tests that specifying a root node does not change the cycle
+        basis.
+
+        """
+        for root in (0, 1, 9):
+            basis = nx.cycle_basis(self.G, 0)
+            self.check_basis(basis)
+
+    def test_disconnected_graph(self):
+        self.G.add_edges_from(pairwise('ABC', cyclic=True))
+        self.expected.append(list('ABC'))
+        cy = nx.cycle_basis(self.G, 9)
+        sort_cy = sorted(sorted(c) for c in cy[:-1]) + [sorted(cy[-1])]
+        assert_equal(sort_cy, self.expected)
+
+    def test_self_loops(self):
+        """Tests that a self-loop appears as a cycle of length one in
+        the cycle basis.
+
+        """
+        self.G.add_edge(0, 0)
+        basis = nx.cycle_basis(self.G)
+        # Prepend the single edge loop to maintain sorted order in the
+        # list of expected cycles.
+        self.expected.insert(0, [0])
+        basis = nx.cycle_basis(self.G)
+        self.check_basis(basis)
+
+    @raises(nx.NetworkXNotImplemented)
+    def test_directed(self):
+        G = nx.DiGraph()
+        nx.cycle_basis(G)
+
+    @raises(nx.NetworkXNotImplemented)
+    def test_multigraph(self):
+        G = nx.MultiGraph()
+        nx.cycle_basis(G)
+
+
 class TestCycles:
-    def setUp(self):
-        G=networkx.Graph()
-        G.add_cycle([0,1,2,3])
-        G.add_cycle([0,3,4,5])
-        G.add_cycle([0,1,6,7,8])
-        G.add_edge(8,9)
-        self.G=G
 
-    def is_cyclic_permutation(self,a,b):
-        n=len(a)
-        if len(b)!=n:
+    def is_cyclic_permutation(self, a, b):
+        n = len(a)
+        if len(b) != n:
             return False
-        l=a+a
-        return any(l[i:i+n]==b for i in range(2*n-n+1))
-
-    def test_cycle_basis(self):
-        G=self.G
-        cy=networkx.cycle_basis(G,0)
-        sort_cy= sorted( sorted(c) for c in cy )
-        assert_equal(sort_cy, [[0,1,2,3],[0,1,6,7,8],[0,3,4,5]])
-        cy=networkx.cycle_basis(G,1)
-        sort_cy= sorted( sorted(c) for c in cy )
-        assert_equal(sort_cy, [[0,1,2,3],[0,1,6,7,8],[0,3,4,5]])
-        cy=networkx.cycle_basis(G,9)
-        sort_cy= sorted( sorted(c) for c in cy )
-        assert_equal(sort_cy, [[0,1,2,3],[0,1,6,7,8],[0,3,4,5]])
-        # test disconnected graphs
-        G.add_cycle(list("ABC"))
-        cy=networkx.cycle_basis(G,9)
-        sort_cy= sorted(sorted(c) for c in cy[:-1]) + [sorted(cy[-1])]
-        assert_equal(sort_cy, [[0,1,2,3],[0,1,6,7,8],[0,3,4,5],['A','B','C']])
-
-    @raises(nx.NetworkXNotImplemented)
-    def test_cycle_basis(self):
-        G=nx.DiGraph()
-        cy=networkx.cycle_basis(G,0)
-
-    @raises(nx.NetworkXNotImplemented)
-    def test_cycle_basis(self):
-        G=nx.MultiGraph()
-        cy=networkx.cycle_basis(G,0)
+        l = a + a
+        return any(l[i:i+n] == b for i in range(n + 1))
 
     def test_simple_cycles(self):
         G = nx.DiGraph([(0, 0), (0, 1), (0, 2), (1, 2), (2, 0), (2, 1), (2, 2)])
@@ -197,7 +249,7 @@ class TestFindCycle(object):
         x_ = [(1,2,0,FORWARD), (1,2,1,REVERSE)]
         assert_equal(x, x_)
 
-    def test_multidigraph_ignore2(self):
+    def test_multidigraph_ignore3(self):
         # Node 2 doesn't need to be searched again from visited from 4.
         # The goal here is to cover the case when 2 to be researched from 4,
         # when 4 is visited from the first time (so we must make sure that 4
