@@ -1,22 +1,24 @@
 # -*- coding: utf-8 -*-
-"""
-************
-Vertex Cover
-************
-
-Given an undirected graph `G = (V, E)` and a function w assigning nonnegative
-weights to its vertices, find a minimum weight subset of V such that each edge
-in E is incident to at least one vertex in the subset.
-
-http://en.wikipedia.org/wiki/Vertex_cover
-"""
 #   Copyright (C) 2011-2012 by
 #   Nicholas Mancuso <nick.mancuso@gmail.com>
 #   All rights reserved.
 #   BSD license.
-from networkx.utils import *
+"""Functions for computing an approximate vertex cover.
+
+A `vertex cover`_ in a graph is a subset of nodes such that each edge in
+the graph is incident to at least one node in the subset. The problem of
+finding a vertex cover of minimum cardinality is called the minimum
+vertex cover problem and is an NP-hard optimization problem.  As such,
+it is unlikely that there exists an efficient algorithm for finding a
+minimum vertex cover of a graph.
+
+.. _vertex cover: https://en.wikipedia.org/wiki/Vertex_cover
+
+"""
+from networkx.utils import not_implemented_for
 __all__ = ["min_weighted_vertex_cover"]
 __author__ = """Nicholas Mancuso (nick.mancuso@gmail.com)"""
+
 
 @not_implemented_for('directed')
 def min_weighted_vertex_cover(G, weight=None):

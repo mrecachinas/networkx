@@ -1,6 +1,15 @@
 # -*- coding: utf-8 -*-
-"""
-Cliques.
+"""Algorithms for finding an approximate maximum clique.
+
+A `clique`_ in a graph is a set of nodes, each distinct pair of which
+are adjacent.
+
+The problem of finding a maximum clique in a graph is an NP-hard
+optimization problem, and as such, it is unlikely that there exists an
+efficient algorithm for finding a maximum clique in a graph.
+
+.. _clique: https://en.wikipedia.org/wiki/Clique_(graph_theory)
+
 """
 #   Copyright (C) 2011-2012 by
 #   Nicholas Mancuso <nick.mancuso@gmail.com>

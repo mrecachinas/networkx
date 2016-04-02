@@ -1,4 +1,4 @@
-""" Fast approximation for k-component structure
+""" Fast approximation for *k*-component structure.
 """
 #    Copyright (C) 2015 by 
 #    Jordi Torrents <jtorrents@milnou.net>

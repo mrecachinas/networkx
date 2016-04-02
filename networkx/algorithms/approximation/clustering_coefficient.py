@@ -4,6 +4,7 @@
 #   Jordi Torrents <jtorrents@milnou.net>
 #   All rights reserved.
 #   BSD license.
+"""Functions for approximating the clustering coefficient of a graph."""
 import random
 from networkx.utils import not_implemented_for
 

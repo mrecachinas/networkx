@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
-"""
-**************
-Graph Matching
-**************
-
-Given a graph G = (V,E), a matching M in G is a set of pairwise non-adjacent
-edges; that is, no two edges share a common vertex.
-
-http://en.wikipedia.org/wiki/Matching_(graph_theory)
-"""
 #   Copyright (C) 2011-2012 by
 #   Nicholas Mancuso <nick.mancuso@gmail.com>
 #   All rights reserved.
 #   BSD license.
+"""Functions for approximating matchings.
+
+A `matching`_ in a graph is a set of pairwise non-adjacent edges; that
+is, no two edges share a common vertex.
+
+.. _matching: https://en.wikipedia.org/wiki/Matching_(graph_theory)
+
+"""
 import networkx as nx
 __all__ = ["min_maximal_matching"]
 __author__ = """Nicholas Mancuso (nick.mancuso@gmail.com)"""

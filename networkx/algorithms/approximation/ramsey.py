@@ -1,19 +1,18 @@
 # -*- coding: utf-8 -*-
-"""
-Ramsey numbers.
-"""
 #   Copyright (C) 2011 by
 #   Nicholas Mancuso <nick.mancuso@gmail.com>
 #   All rights reserved.
 #   BSD license.
+"""Functions for approximating Ramsey numbers."""
 import networkx as nx
-from ...utils import arbitrary_element
+from networkx.utils import arbitrary_element
 
 __all__ = ["ramsey_R2"]
 __author__ = """Nicholas Mancuso (nick.mancuso@gmail.com)"""
 
 def ramsey_R2(G):
-    r"""Approximately computes the Ramsey number `R(2;s,t)` for graph.
+    """Approximately computes the Ramsey number :math:`R(2; s, t)` for
+    the given graph.
 
     Parameters
     ----------
