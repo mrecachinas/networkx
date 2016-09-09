@@ -1,17 +1,20 @@
-"""
-Closeness centrality measures.
-"""
 #    Copyright (C) 2004-2016 by
 #    Aric Hagberg <hagberg@lanl.gov>
 #    Dan Schult <dschult@colgate.edu>
 #    Pieter Swart <swart@lanl.gov>
 #    All rights reserved.
 #    BSD license.
-import functools
+#
+# Authors:
+#   Aric Hagberg <aric.hagberg@gmail.com>
+#   Pieter Swart <swart@lanl.gov>
+#   Sasha Gutfraind <ag362@cornell.edu>
+#
+"""
+Closeness centrality measures.
+"""
 import networkx as nx
-__author__ = "\n".join(['Aric Hagberg <aric.hagberg@gmail.com>',
-                        'Pieter Swart (swart@lanl.gov)',
-                        'Sasha Gutfraind (ag362@cornell.edu)'])
+
 __all__ = ['closeness_centrality']
 
 
@@ -40,7 +43,7 @@ def closeness_centrality(G, u=None, distance=None, normalized=True):
     u : node, optional
       Return only the value for node u
     distance : edge attribute key, optional (default=None)
-      Use the specified edge attribute as the edge distance in shortest 
+      Use the specified edge attribute as the edge distance in shortest
       path calculations
     normalized : bool, optional
       If True (default) normalize by the number of nodes in the connected
@@ -48,8 +51,9 @@ def closeness_centrality(G, u=None, distance=None, normalized=True):
 
     Returns
     -------
-    nodes : dictionary
-      Dictionary of nodes with closeness centrality as the value.
+    nodes : dictionary or number
+      Dictionary of nodes with closeness centrality as the value, or a
+      single number if `u` was specified.
 
     See Also
     --------
@@ -70,34 +74,22 @@ def closeness_centrality(G, u=None, distance=None, normalized=True):
 
     References
     ----------
-    .. [1] Linton C. Freeman: Centrality in networks: I.
-       Conceptual clarification. Social Networks 1:215-239, 1979.
-       http://leonidzhukov.ru/hse/2013/socialnetworks/papers/freeman79-centrality.pdf
-    """
-    if distance is not None:
-        # use Dijkstra's algorithm with specified attribute as edge weight 
-        path_length = functools.partial(nx.single_source_dijkstra_path_length,
-                                        weight=distance)
-    else:
-        path_length = nx.single_source_shortest_path_length
+    .. [1] Freeman, Linton C. "Centrality in social networks
+       conceptual clarification." *Social networks* 1.3 (1978):
+       215--239. <http://dx.doi.org/10.1016/0378-8733(78)90021-7>
 
+    """
+    if G.is_directed():
+        G = G.reverse()
     if u is None:
-        nodes = G.nodes()
-    else:
-        nodes = [u]
-    closeness_centrality = {}
-    for n in nodes:
-        sp = dict(path_length(G, n))
-        totsp = sum(sp.values())
-        if totsp > 0.0 and len(G) > 1:
-            closeness_centrality[n] = (len(sp)-1.0) / totsp
-            # normalize to number of nodes-1 in connected part
-            if normalized:
-                s = (len(sp)-1.0) / ( len(G) - 1 )
-                closeness_centrality[n] *= s
+        sp = nx.shortest_path_length(G, weight=distance)
+        if normalized:
+            return {v: (len(dd) - 1) / sum(dd.values()) for v, dd in sp}
         else:
-            closeness_centrality[n] = 0.0
-    if u is not None:
-        return closeness_centrality[u]
+            return {v: (len(G) - 1) / sum(dd.values()) for v, dd in sp}
     else:
-        return closeness_centrality
+        sp = nx.shortest_path_length(G, source=u, weight=distance)
+        if normalized:
+            return (len(sp) - 1) / sum(d for v, d in sp)
+        else:
+            return (len(G) - 1) / sum(d for v, d in sp)
