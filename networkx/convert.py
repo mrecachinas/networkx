@@ -1,3 +1,14 @@
+#    Copyright (C) 2006-2013 by
+#    Aric Hagberg <hagberg@lanl.gov>
+#    Dan Schult <dschult@colgate.edu>
+#    Pieter Swart <swart@lanl.gov>
+#    All rights reserved.
+#    BSD license.
+#
+# Authors:
+#   Aric Hagberg <aric.hagberg@gmail.com>
+#   Pieter Swart <swart@lanl.gov>
+#   Dan Schult <dschult@colgate.edu>
 """Functions to convert NetworkX graphs to and from other formats.
 
 The preferred way of converting data to a NetworkX graph is through the
@@ -15,21 +26,14 @@ See Also
 --------
 nx_agraph, nx_pydot
 """
-#    Copyright (C) 2006-2013 by
-#    Aric Hagberg <hagberg@lanl.gov>
-#    Dan Schult <dschult@colgate.edu>
-#    Pieter Swart <swart@lanl.gov>
-#    All rights reserved.
-#    BSD license.
 import warnings
 import networkx as nx
-__author__ = """\n""".join(['Aric Hagberg <aric.hagberg@gmail.com>',
-                           'Pieter Swart (swart@lanl.gov)',
-                           'Dan Schult(dschult@colgate.edu)'])
+
 __all__ = ['to_networkx_graph',
            'from_dict_of_dicts', 'to_dict_of_dicts',
            'from_dict_of_lists', 'to_dict_of_lists',
-           'from_edgelist', 'to_edgelist']
+]
+
 
 def _prep_create_using(create_using):
     """Return a graph object ready to be populated.
@@ -117,14 +121,11 @@ def to_networkx_graph(data,create_using=None,multigraph_input=False):
                 raise TypeError("Input is not known type.")
 
     # list or generator of edges
-    if (isinstance(data,list)
-        or isinstance(data,tuple)
-        or hasattr(data,'next')
-        or hasattr(data, '__next__')):
-        try:
-            return from_edgelist(data,create_using=create_using)
-        except:
-            raise nx.NetworkXError("Input is not a valid edge list")
+    if (isinstance(data, (list, tuple)) or hasattr(data, 'next') or
+        hasattr(data, '__next__')):
+        G = _prep_create_using(create_using)
+        G.add_edges_from(data)
+        return G
 
     # Pandas DataFrame
     try:
@@ -362,45 +363,4 @@ def from_dict_of_dicts(d,create_using=None,multigraph_input=False):
             G.add_edges_from( ( (u,v,data)
                                 for u,nbrs in d.items()
                                 for v,data in nbrs.items()) )
-    return G
-
-def to_edgelist(G,nodelist=None):
-    """Return a list of edges in the graph.
-
-    Parameters
-    ----------
-    G : graph
-       A NetworkX graph
-
-    nodelist : list
-       Use only nodes specified in nodelist
-
-    """
-    if nodelist is None:
-        return G.edges(data=True)
-    else:
-        return G.edges(nodelist,data=True)
-
-def from_edgelist(edgelist,create_using=None):
-    """Return a graph from a list of edges.
-
-    Parameters
-    ----------
-    edgelist : list or iterator
-      Edge tuples
-
-    create_using : NetworkX graph
-       Use specified graph for result.  Otherwise a new graph is created.
-
-    Examples
-    --------
-    >>> edgelist= [(0,1)] # single edge (0,1)
-    >>> G=nx.from_edgelist(edgelist)
-
-    or
-    >>> G=nx.Graph(edgelist) # use Graph constructor
-
-    """
-    G=_prep_create_using(create_using)
-    G.add_edges_from(edgelist)
     return G
